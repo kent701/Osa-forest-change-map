@@ -99,9 +99,9 @@ function initMap() {
 function loadForestData() {
     console.log('Loading forest data from GitHub Releases...');
     
-    // YOUR GITHUB RELEASE URLs
-    const url2000 = 'https://github.com/kent701/Osa-forest-change-map/releases/download/v1.0/osa_2000_forest.geojson';
-    const url2024 = 'https://github.com/kent701/Osa-forest-change-map/releases/download/v1.0/osa_2024_forest.geojson';
+    // ✅ CORRECTED RAW LINKS FOR GITHUB RELEASES
+    const url2000 = 'https://raw.githubusercontent.com/kent701/Osa-forest-change-map/refs/tags/v1.0/osa_2000_forest.geojson';
+    const url2024 = 'https://raw.githubusercontent.com/kent701/Osa-forest-change-map/refs/tags/v1.0/osa_2024_forest.geojson';
     
     // Load 2000 data
     fetch(url2000)
