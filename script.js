@@ -1,7 +1,7 @@
 /*  ============================================================
     FOREST CHANGE & CONSERVATION IMPACT MONITOR
     Osa Peninsula, Costa Rica | 2000-2024
-    Developed by: [Arnaud Kentsa]
+    Developed by: [Arnaud Kentsa] 
     ============================================================ */
 
 // ============================================================
