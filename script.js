@@ -13,34 +13,111 @@ let stats2024 = {};
 let myChart;
 
 // ============================================================
-// LOCAL FILE PATHS (files in same repository)
+// LOCAL FILE PATHS
 // ============================================================
-// Since GeoJSON files are now in the same repository,
-// we can use simple relative paths
 const url2000 = 'osa_2000_forest.geojson';
 const url2024 = 'osa_2024_forest.geojson';
+
+// ============================================================
+// HELPER FUNCTION TO GET CLASS NAME FROM FEATURE
+// ============================================================
+function getClassNameFromFeature(properties) {
+    // Try different possible property names
+    const possibleNames = [
+        'ClassLabel', 'class', 'CLASS', 'label', 'Label', 
+        'LandCover', 'landcover', 'Type', 'type', 'Name', 'name'
+    ];
+    
+    for (const name of possibleNames) {
+        if (properties[name] !== undefined && properties[name] !== null) {
+            return String(properties[name]);
+        }
+    }
+    
+    // If no class found, log all properties for debugging
+    console.warn('No class property found. Available properties:', Object.keys(properties));
+    return 'Unknown';
+}
+
+// ============================================================
+// HELPER FUNCTION TO GET AREA FROM FEATURE
+// ============================================================
+function getAreaFromFeature(properties) {
+    // Try different possible area property names
+    const possibleAreas = [
+        'area_ha', 'Area_ha', 'AREA_HA', 'AreaHa', 'area', 
+        'Area', 'hectares', 'Hectares', 'shape_area', 'Shape_Area'
+    ];
+    
+    for (const name of possibleAreas) {
+        if (properties[name] !== undefined && properties[name] !== null) {
+            const area = parseFloat(properties[name]);
+            if (!isNaN(area)) {
+                return area;
+            }
+        }
+    }
+    
+    return 0;
+}
 
 // ============================================================
 // COLOR SCHEME FOR LAND COVER CLASSES
 // ============================================================
 function getColorByClass(className) {
-    const colors = {
-        'Mature Forest': '#1B5E20',
-        'Secondary Forest': '#4CAF50',
-        'Plantation': '#81C784',
-        'Pasture': '#FFF59D',
-        'Agriculture': '#FFD54F',
-        'Urban/Built-up': '#E53935',
-        'Water': '#1976D2',
-        'Bare Soil': '#8D6E63',
-        'Mangrove': '#00695C',
-        'Wetland': '#0097A7'
-    };
-    return colors[className] || '#BDBDBD';
+    const classNameLower = String(className).toLowerCase();
+    
+    // Forest related classes
+    if (classNameLower.includes('forest') || classNameLower.includes('mature')) {
+        return '#1B5E20'; // Dark green
+    }
+    // Regeneration / Secondary forest
+    else if (classNameLower.includes('secondary') || classNameLower.includes('regeneration') || classNameLower.includes('regrowth')) {
+        return '#4CAF50'; // Light green
+    }
+    // Plantation
+    else if (classNameLower.includes('plantation')) {
+        return '#81C784'; // Pale green
+    }
+    // Pasture / Grassland
+    else if (classNameLower.includes('pasture') || classNameLower.includes('grass')) {
+        return '#FFF59D'; // Light yellow
+    }
+    // Agriculture / Crops
+    else if (classNameLower.includes('agriculture') || classNameLower.includes('crop')) {
+        return '#FFD54F'; // Yellow
+    }
+    // Urban / Built-up
+    else if (classNameLower.includes('urban') || classNameLower.includes('built')) {
+        return '#E53935'; // Red
+    }
+    // Water
+    else if (classNameLower.includes('water')) {
+        return '#1976D2'; // Blue
+    }
+    // Bare soil
+    else if (classNameLower.includes('bare') || classNameLower.includes('soil')) {
+        return '#8D6E63'; // Brown
+    }
+    // Mangrove
+    else if (classNameLower.includes('mangrove')) {
+        return '#00695C'; // Dark teal
+    }
+    // Wetland
+    else if (classNameLower.includes('wetland')) {
+        return '#0097A7'; // Teal
+    }
+    // Non-forest
+    else if (classNameLower.includes('non') || classNameLower.includes('cleared')) {
+        return '#FFB74D'; // Orange
+    }
+    
+    // Default
+    return '#BDBDBD'; // Gray
 }
 
 // ============================================================
-// INITIALIZE MAP WITH LIGHT BASEMAP
+// INITIALIZE MAP
 // ============================================================
 function initMap() {
     map = L.map('map', {
@@ -52,7 +129,7 @@ function initMap() {
         }
     }).setView([8.7, -83.5], 10);
     
-    // Light Gray Canvas (BEST for data visualization)
+    // Light Gray Canvas
     const lightGrayLayer = L.tileLayer(
         'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
         { 
@@ -80,10 +157,8 @@ function initMap() {
         }
     );
     
-    // Add default layer
     lightGrayLayer.addTo(map);
     
-    // Layer control for switching
     const baseMaps = {
         "Light Gray (Recommended)": lightGrayLayer,
         "Clean White": cartoLightLayer,
@@ -94,58 +169,59 @@ function initMap() {
         position: 'topright'
     }).addTo(map);
     
-    // Setup compass
     setupCompass();
-    
-    // Load data from local files
     loadForestData();
 }
 
 // ============================================================
-// LOAD GEOJSON DATA FROM LOCAL FILES
+// LOAD GEOJSON DATA
 // ============================================================
 function loadForestData() {
-    console.log('Loading forest data from local repository...');
-    console.log('2000 file:', url2000);
-    console.log('2024 file:', url2024);
+    console.log('Loading forest data...');
     
     let loaded2000 = false;
     let loaded2024 = false;
     
-    // Show loading indicator
-    showLoadingStatus(true);
-    
     // Load 2000 data
     fetch(url2000)
-        .then(response => {
-            console.log('2000 response status:', response.status);
-            if (!response.ok) {
-                throw new Error(`Failed to load 2000 data: ${response.status} ${response.statusText}`);
-            }
-            return response.json();
-        })
+        .then(response => response.json())
         .then(data => {
-            console.log('✅ 2000 data loaded successfully from repository');
-            console.log('Features count:', data.features ? data.features.length : 0);
+            console.log('✅ 2000 data loaded');
+            
+            // Debug: Show sample data structure
+            if (data.features && data.features.length > 0) {
+                const sample = data.features[0];
+                console.log('Sample feature properties:', sample.properties);
+                console.log('Available property keys:', Object.keys(sample.properties));
+            }
             
             stats2000 = calculateStatistics(data);
+            console.log('2000 Statistics:', stats2000);
             
             forestLayer2000 = L.geoJSON(data, {
-                style: feature => ({
-                    fillColor: getColorByClass(feature.properties.ClassLabel),
-                    color: '#ffffff',
-                    weight: 0.5,
-                    fillOpacity: 0.8
-                }),
+                style: feature => {
+                    const className = getClassNameFromFeature(feature.properties);
+                    return {
+                        fillColor: getColorByClass(className),
+                        color: '#ffffff',
+                        weight: 0.5,
+                        fillOpacity: 0.8
+                    };
+                },
                 onEachFeature: (feature, layer) => {
+                    const className = getClassNameFromFeature(feature.properties);
+                    const area = getAreaFromFeature(feature.properties);
+                    
                     layer.bindPopup(`
-                        <div style="font-family: 'Inter', sans-serif;">
+                        <div style="font-family: 'Inter', sans-serif; min-width: 200px;">
                             <h4 style="margin: 0 0 8px 0; color: #1B5E20;">Land Cover (2000)</h4>
-                            <div><strong>Class:</strong> ${feature.properties.ClassLabel}</div>
-                            <div><strong>Area:</strong> ${feature.properties.area_ha ? Math.round(feature.properties.area_ha).toLocaleString() : 'N/A'} ha</div>
+                            <div><strong>Class:</strong> ${className}</div>
+                            <div><strong>Area:</strong> ${area > 0 ? Math.round(area).toLocaleString() : 'N/A'} ha</div>
+                            <hr style="margin: 8px 0;">
+                            <div style="font-size: 12px; color: #666;">Click for details</div>
                         </div>
                     `);
-                    addPolygonHoverEffects(layer, feature);
+                    addPolygonHoverEffects(layer, className);
                 }
             });
             
@@ -155,41 +231,42 @@ function loadForestData() {
             }
         })
         .catch(error => {
-            console.error('❌ Error loading 2000 data:', error);
-            showError('2000 data', error.message);
+            console.error('Error loading 2000 data:', error);
         });
     
     // Load 2024 data
     fetch(url2024)
-        .then(response => {
-            console.log('2024 response status:', response.status);
-            if (!response.ok) {
-                throw new Error(`Failed to load 2024 data: ${response.status} ${response.statusText}`);
-            }
-            return response.json();
-        })
+        .then(response => response.json())
         .then(data => {
-            console.log('✅ 2024 data loaded successfully from repository');
-            console.log('Features count:', data.features ? data.features.length : 0);
+            console.log('✅ 2024 data loaded');
             
             stats2024 = calculateStatistics(data);
+            console.log('2024 Statistics:', stats2024);
             
             forestLayer2024 = L.geoJSON(data, {
-                style: feature => ({
-                    fillColor: getColorByClass(feature.properties.ClassLabel),
-                    color: '#ffffff',
-                    weight: 0.5,
-                    fillOpacity: 0.8
-                }),
+                style: feature => {
+                    const className = getClassNameFromFeature(feature.properties);
+                    return {
+                        fillColor: getColorByClass(className),
+                        color: '#ffffff',
+                        weight: 0.5,
+                        fillOpacity: 0.8
+                    };
+                },
                 onEachFeature: (feature, layer) => {
+                    const className = getClassNameFromFeature(feature.properties);
+                    const area = getAreaFromFeature(feature.properties);
+                    
                     layer.bindPopup(`
-                        <div style="font-family: 'Inter', sans-serif;">
+                        <div style="font-family: 'Inter', sans-serif; min-width: 200px;">
                             <h4 style="margin: 0 0 8px 0; color: #1B5E20;">Land Cover (2024)</h4>
-                            <div><strong>Class:</strong> ${feature.properties.ClassLabel}</div>
-                            <div><strong>Area:</strong> ${feature.properties.area_ha ? Math.round(feature.properties.area_ha).toLocaleString() : 'N/A'} ha</div>
+                            <div><strong>Class:</strong> ${className}</div>
+                            <div><strong>Area:</strong> ${area > 0 ? Math.round(area).toLocaleString() : 'N/A'} ha</div>
+                            <hr style="margin: 8px 0;">
+                            <div style="font-size: 12px; color: #666;">Click for details</div>
                         </div>
                     `);
-                    addPolygonHoverEffects(layer, feature);
+                    addPolygonHoverEffects(layer, className);
                 }
             });
             
@@ -199,127 +276,24 @@ function loadForestData() {
             }
         })
         .catch(error => {
-            console.error('❌ Error loading 2024 data:', error);
-            showError('2024 data', error.message);
+            console.error('Error loading 2024 data:', error);
         });
 }
 
-// Helper function to show loading status
-function showLoadingStatus(show) {
-    let statusDiv = document.getElementById('loadingStatus');
-    if (!statusDiv) {
-        statusDiv = document.createElement('div');
-        statusDiv.id = 'loadingStatus';
-        statusDiv.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: #333;
-            color: white;
-            padding: 10px 20px;
-            border-radius: 5px;
-            z-index: 1000;
-            font-family: monospace;
-            font-size: 12px;
-        `;
-        document.body.appendChild(statusDiv);
-    }
-    
-    if (show) {
-        statusDiv.textContent = '📥 Loading forest data from repository... (large files may take a moment)';
-        statusDiv.style.display = 'block';
-    } else {
-        statusDiv.style.display = 'none';
-    }
-}
-
-// Helper function to show error
-function showError(dataName, errorMessage) {
-    let errorDiv = document.getElementById('errorStatus');
-    if (!errorDiv) {
-        errorDiv = document.createElement('div');
-        errorDiv.id = 'errorStatus';
-        errorDiv.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: #e74c3c;
-            color: white;
-            padding: 10px 20px;
-            border-radius: 5px;
-            z-index: 1000;
-            font-family: monospace;
-            font-size: 12px;
-            display: none;
-        `;
-        document.body.appendChild(errorDiv);
-    }
-    
-    errorDiv.textContent = `❌ Error loading ${dataName}: ${errorMessage}`;
-    errorDiv.style.display = 'block';
-    setTimeout(() => {
-        errorDiv.style.display = 'none';
-    }, 5000);
-}
-
-// Helper function to create success div
-function showSuccessMessage(message) {
-    let successDiv = document.getElementById('successStatus');
-    if (!successDiv) {
-        successDiv = document.createElement('div');
-        successDiv.id = 'successStatus';
-        successDiv.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: #27ae60;
-            color: white;
-            padding: 10px 20px;
-            border-radius: 5px;
-            z-index: 1000;
-            font-family: monospace;
-            font-size: 12px;
-            display: none;
-        `;
-        document.body.appendChild(successDiv);
-    }
-    
-    successDiv.textContent = message;
-    successDiv.style.display = 'block';
-    setTimeout(() => {
-        successDiv.style.display = 'none';
-    }, 3000);
-}
-
-// Helper function to finish loading
-function finishLoading() {
-    setTimeout(() => {
-        showYear('2000');
-        updateChangeIndicators();
-        setupHoverHighlights();
-        showLoadingStatus(false);
-        console.log('🎉 Both datasets loaded successfully from repository!');
-        console.log('📊 2000 Total Area:', Math.round(stats2000.Total).toLocaleString(), 'ha');
-        console.log('📊 2024 Total Area:', Math.round(stats2024.Total).toLocaleString(), 'ha');
-        showSuccessMessage('✅ Map data loaded successfully!');
-    }, 500);
-}
-
 // ============================================================
-// CALCULATE STATISTICS FROM GEOJSON
+// CALCULATE STATISTICS
 // ============================================================
 function calculateStatistics(geojson) {
     const stats = {};
     let totalArea = 0;
     
     if (!geojson.features) {
-        console.warn('No features found in GeoJSON');
         return stats;
     }
     
     geojson.features.forEach(feature => {
-        const className = feature.properties.ClassLabel;
-        const area = feature.properties.area_ha || 0;
+        const className = getClassNameFromFeature(feature.properties);
+        const area = getAreaFromFeature(feature.properties);
         
         if (!stats[className]) {
             stats[className] = 0;
@@ -333,20 +307,16 @@ function calculateStatistics(geojson) {
 }
 
 // ============================================================
-// POLYGON HOVER EFFECTS (Map -> Legend highlighting)
+// POLYGON HOVER EFFECTS
 // ============================================================
-function addPolygonHoverEffects(layer, feature) {
-    const className = feature.properties.ClassLabel;
-    
+function addPolygonHoverEffects(layer, className) {
     layer.on('mouseover', function() {
-        // Highlight polygon
         this.setStyle({
             weight: 3,
             color: '#FFD700',
             fillOpacity: 0.95
         });
         
-        // Highlight corresponding legend item
         const legendItem = document.querySelector(`.legend-item[data-class="${className}"]`);
         if (legendItem) {
             legendItem.classList.add('highlighted');
@@ -354,14 +324,12 @@ function addPolygonHoverEffects(layer, feature) {
     });
     
     layer.on('mouseout', function() {
-        // Reset polygon style
         this.setStyle({
             weight: 0.5,
             color: '#ffffff',
             fillOpacity: 0.8
         });
         
-        // Remove legend highlight
         const legendItem = document.querySelector(`.legend-item[data-class="${className}"]`);
         if (legendItem) {
             legendItem.classList.remove('highlighted');
@@ -370,7 +338,7 @@ function addPolygonHoverEffects(layer, feature) {
 }
 
 // ============================================================
-// LEGEND HOVER EFFECTS (Legend -> Map highlighting)
+// LEGEND HOVER EFFECTS
 // ============================================================
 function setupHoverHighlights() {
     const legendItems = document.querySelectorAll('.legend-item');
@@ -378,13 +346,11 @@ function setupHoverHighlights() {
     legendItems.forEach(item => {
         const className = item.getAttribute('data-class');
         
-        // Mouse enter legend item
         item.addEventListener('mouseenter', () => {
             highlightPolygonsByClass(className);
             item.classList.add('highlighted');
         });
         
-        // Mouse leave legend item
         item.addEventListener('mouseleave', () => {
             removeAllHighlights();
             item.classList.remove('highlighted');
@@ -397,7 +363,8 @@ function highlightPolygonsByClass(className) {
     if (!currentLayer) return;
     
     currentLayer.eachLayer(layer => {
-        if (layer.feature.properties.ClassLabel === className) {
+        const layerClassName = getClassNameFromFeature(layer.feature.properties);
+        if (layerClassName === className) {
             layer.setStyle({
                 weight: 3,
                 color: '#FFD700',
@@ -421,12 +388,11 @@ function removeAllHighlights() {
 }
 
 // ============================================================
-// SHOW SELECTED YEAR ON MAP
+// SHOW SELECTED YEAR
 // ============================================================
 function showYear(year) {
     currentYear = year;
     
-    // Remove both layers
     if (forestLayer2000 && map.hasLayer(forestLayer2000)) {
         map.removeLayer(forestLayer2000);
     }
@@ -434,7 +400,6 @@ function showYear(year) {
         map.removeLayer(forestLayer2024);
     }
     
-    // Add selected year
     if (year === '2000' && forestLayer2000) {
         forestLayer2000.addTo(map);
         updateStatisticsPanel(stats2000);
@@ -445,12 +410,10 @@ function showYear(year) {
         console.log('Showing 2024 data');
     }
     
-    // Update button states
     document.querySelectorAll('.year-btn').forEach(btn => {
         btn.classList.toggle('active', btn.textContent === year);
     });
     
-    // Update title
     const titleElement = document.getElementById('currentYearTitle');
     if (titleElement) {
         titleElement.textContent = `Land Cover ${year}`;
@@ -482,7 +445,6 @@ function updateStatisticsPanel(stats) {
         cellPercent.textContent = percent + '%';
     });
     
-    // Update chart
     updateChart(stats);
 }
 
@@ -525,9 +487,7 @@ function updateChart(stats) {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: {
-                    display: false
-                },
+                legend: { display: false },
                 tooltip: {
                     callbacks: {
                         label: function(context) {
@@ -549,8 +509,7 @@ function updateChart(stats) {
 function updateChangeIndicators() {
     if (!stats2000['Total'] || !stats2024['Total']) return;
     
-    // Calculate changes for key classes
-    const forestClasses = ['Mature Forest', 'Secondary Forest'];
+    const forestClasses = ['Mature Forest', 'Secondary Forest', 'Forest', 'Regeneration'];
     let forest2000 = 0;
     let forest2024 = 0;
     
@@ -562,7 +521,6 @@ function updateChangeIndicators() {
     const forestChange = forest2024 - forest2000;
     const forestChangePercent = ((forestChange / forest2000) * 100).toFixed(1);
     
-    // Update UI
     const forestChangeElement = document.getElementById('forestChange');
     const forestChangePercentElement = document.getElementById('forestChangePercent');
     
@@ -577,7 +535,24 @@ function updateChangeIndicators() {
 }
 
 // ============================================================
-// SETUP COMPASS (Real rotation tracking)
+// FINISH LOADING
+// ============================================================
+function finishLoading() {
+    setTimeout(() => {
+        showYear('2000');
+        updateChangeIndicators();
+        setupHoverHighlights();
+        console.log('🎉 Both datasets loaded!');
+        console.log('📊 2000 Total Area:', Math.round(stats2000.Total).toLocaleString(), 'ha');
+        console.log('📊 2024 Total Area:', Math.round(stats2024.Total).toLocaleString(), 'ha');
+        
+        // Update the statistics table display
+        updateStatisticsPanel(stats2000);
+    }, 500);
+}
+
+// ============================================================
+// SETUP COMPASS
 // ============================================================
 function setupCompass() {
     const compassNeedle = document.getElementById('compassNeedle');
@@ -599,16 +574,14 @@ function setupCompass() {
 }
 
 // ============================================================
-// PDF DOWNLOAD FUNCTIONALITY
+// PDF DOWNLOAD
 // ============================================================
 function setupPdfDownload() {
     const downloadBtn = document.getElementById('downloadPdfBtn');
     if (!downloadBtn) return;
     
     downloadBtn.addEventListener('click', function() {
-        // Check if libraries are loaded
         if (typeof window.jspdf === 'undefined' || typeof html2canvas === 'undefined') {
-            console.error('PDF libraries not loaded');
             downloadTextReport();
             return;
         }
@@ -616,17 +589,14 @@ function setupPdfDownload() {
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF('p', 'mm', 'a4');
         
-        // Title
         pdf.setFontSize(20);
         pdf.setTextColor(27, 94, 32);
         pdf.text('Forest Change Monitor Report', 105, 20, { align: 'center' });
         
-        // Subtitle
         pdf.setFontSize(12);
         pdf.setTextColor(100, 100, 100);
         pdf.text('Osa Peninsula, Costa Rica (2000-2024)', 105, 28, { align: 'center' });
         
-        // Statistics
         let yPos = 45;
         pdf.setFontSize(14);
         pdf.setTextColor(0, 0, 0);
@@ -635,7 +605,6 @@ function setupPdfDownload() {
         yPos += 10;
         pdf.setFontSize(10);
         
-        // 2000 stats
         pdf.text('Year 2000:', 20, yPos);
         yPos += 7;
         Object.keys(stats2000).forEach(className => {
@@ -646,7 +615,6 @@ function setupPdfDownload() {
         });
         
         yPos += 5;
-        // 2024 stats
         pdf.text('Year 2024:', 20, yPos);
         yPos += 7;
         Object.keys(stats2024).forEach(className => {
@@ -656,15 +624,11 @@ function setupPdfDownload() {
             yPos += 5;
         });
         
-        // Save
         const filename = `Osa_Forest_Change_Report_${new Date().toISOString().split('T')[0]}.pdf`;
         pdf.save(filename);
-        
-        console.log('PDF generated successfully');
     });
 }
 
-// Fallback text report
 function downloadTextReport() {
     let report = 'FOREST CHANGE MONITOR REPORT\n';
     report += 'Osa Peninsula, Costa Rica (2000-2024)\n\n';
@@ -690,22 +654,15 @@ function downloadTextReport() {
 }
 
 // ============================================================
-// INITIALIZE APPLICATION
+// INITIALIZE
 // ============================================================
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Initializing Forest Change Monitor...');
-    console.log('GeoJSON files are stored in the same repository');
-    
-    // Initialize map
     initMap();
     
-    // Setup year buttons
     document.querySelectorAll('.year-btn').forEach(btn => {
         btn.addEventListener('click', () => showYear(btn.textContent));
     });
     
-    // Setup PDF download
     setupPdfDownload();
-    
-    console.log('Application initialized successfully');
 });
