@@ -89,29 +89,33 @@ function initMap() {
     // Setup compass
     setupCompass();
     
-    // Load data from GitHub Releases
+    // Load data from GitHub Releases via jsDelivr
     loadForestData();
 }
 
 // ============================================================
-// LOAD GEOJSON DATA FROM GITHUB RELEASES
+// LOAD GEOJSON DATA FROM GITHUB RELEASES VIA JSDELIVR
 // ============================================================
 function loadForestData() {
-    console.log('Loading forest data from GitHub Releases...');
+    console.log('Loading forest data from GitHub Releases via jsDelivr...');
     
-    // ✅ CORRECTED RAW LINKS FOR GITHUB RELEASES
-    const url2000 = 'https://raw.githubusercontent.com/kent701/Osa-forest-change-map/refs/tags/v1.0/osa_2000_forest.geojson';
-    const url2024 = 'https://raw.githubusercontent.com/kent701/Osa-forest-change-map/refs/tags/v1.0/osa_2024_forest.geojson';
+    // Using jsDelivr CDN - works better with large files and Git LFS
+    const url2000 = 'https://cdn.jsdelivr.net/gh/kent701/Osa-forest-change-map@v1.0/osa_2000_forest.geojson';
+    const url2024 = 'https://cdn.jsdelivr.net/gh/kent701/Osa-forest-change-map@v1.0/osa_2024_forest.geojson';
     
     // Load 2000 data
     fetch(url2000)
         .then(response => {
             console.log('2000 response status:', response.status);
-            if (!response.ok) throw new Error(`Failed to load 2000 data: ${response.status}`);
+            if (!response.ok) {
+                throw new Error(`Failed to load 2000 data: ${response.status} ${response.statusText}`);
+            }
             return response.json();
         })
         .then(data => {
-            console.log('✅ 2000 data loaded successfully');
+            console.log('✅ 2000 data loaded successfully via jsDelivr');
+            console.log('2000 features count:', data.features ? data.features.length : 'No features');
+            
             stats2000 = calculateStatistics(data);
             
             forestLayer2000 = L.geoJSON(data, {
@@ -132,21 +136,28 @@ function loadForestData() {
                     addPolygonHoverEffects(layer, feature);
                 }
             });
+            
+            // Check if 2024 data is also loaded
+            checkBothDatasetsLoaded();
         })
         .catch(error => {
             console.error('❌ Error loading 2000 data:', error);
-            alert('Could not load 2000 data from GitHub Releases.\n\nCheck:\n1. Release exists (v1.0)\n2. File is attached to release\n3. Internet connection\n\nSee browser console (F12) for details.');
+            alert(`Could not load 2000 data from jsDelivr.\n\nError: ${error.message}\n\nCheck:\n1. Release v1.0 exists\n2. Files are attached to release\n3. Internet connection\n\nSee browser console (F12) for details.`);
         });
     
     // Load 2024 data
     fetch(url2024)
         .then(response => {
             console.log('2024 response status:', response.status);
-            if (!response.ok) throw new Error(`Failed to load 2024 data: ${response.status}`);
+            if (!response.ok) {
+                throw new Error(`Failed to load 2024 data: ${response.status} ${response.statusText}`);
+            }
             return response.json();
         })
         .then(data => {
-            console.log('✅ 2024 data loaded successfully');
+            console.log('✅ 2024 data loaded successfully via jsDelivr');
+            console.log('2024 features count:', data.features ? data.features.length : 'No features');
+            
             stats2024 = calculateStatistics(data);
             
             forestLayer2024 = L.geoJSON(data, {
@@ -168,20 +179,27 @@ function loadForestData() {
                 }
             });
             
-            // After both datasets load, show initial year
-            setTimeout(() => {
-                if (forestLayer2000 && forestLayer2024) {
-                    showYear('2000');
-                    updateChangeIndicators();
-                    setupHoverHighlights();
-                    console.log('🎉 Both datasets loaded! Application ready.');
-                }
-            }, 1000);
+            // Check if 2000 data is also loaded
+            checkBothDatasetsLoaded();
         })
         .catch(error => {
             console.error('❌ Error loading 2024 data:', error);
-            alert('Could not load 2024 data from GitHub Releases.\n\nCheck:\n1. Release exists (v1.0)\n2. File is attached to release\n3. Internet connection\n\nSee browser console (F12) for details.');
+            alert(`Could not load 2024 data from jsDelivr.\n\nError: ${error.message}\n\nCheck:\n1. Release v1.0 exists\n2. Files are attached to release\n3. Internet connection\n\nSee browser console (F12) for details.`);
         });
+}
+
+// Helper function to check if both datasets are loaded
+function checkBothDatasetsLoaded() {
+    if (forestLayer2000 && forestLayer2024) {
+        setTimeout(() => {
+            showYear('2000');
+            updateChangeIndicators();
+            setupHoverHighlights();
+            console.log('🎉 Both datasets loaded successfully! Application ready.');
+            console.log('📊 2000 Total Area:', Math.round(stats2000.Total).toLocaleString(), 'ha');
+            console.log('📊 2024 Total Area:', Math.round(stats2024.Total).toLocaleString(), 'ha');
+        }, 500);
+    }
 }
 
 // ============================================================
@@ -190,6 +208,11 @@ function loadForestData() {
 function calculateStatistics(geojson) {
     const stats = {};
     let totalArea = 0;
+    
+    if (!geojson.features) {
+        console.warn('No features found in GeoJSON');
+        return stats;
+    }
     
     geojson.features.forEach(feature => {
         const className = feature.properties.ClassLabel;
@@ -312,9 +335,11 @@ function showYear(year) {
     if (year === '2000' && forestLayer2000) {
         forestLayer2000.addTo(map);
         updateStatisticsPanel(stats2000);
+        console.log('Showing 2000 data');
     } else if (year === '2024' && forestLayer2024) {
         forestLayer2024.addTo(map);
         updateStatisticsPanel(stats2024);
+        console.log('Showing 2024 data');
     }
     
     // Update button states
@@ -323,7 +348,10 @@ function showYear(year) {
     });
     
     // Update title
-    document.getElementById('currentYearTitle').textContent = `Land Cover ${year}`;
+    const titleElement = document.getElementById('currentYearTitle');
+    if (titleElement) {
+        titleElement.textContent = `Land Cover ${year}`;
+    }
 }
 
 // ============================================================
@@ -331,6 +359,8 @@ function showYear(year) {
 // ============================================================
 function updateStatisticsPanel(stats) {
     const tbody = document.querySelector('#statsTable tbody');
+    if (!tbody) return;
+    
     tbody.innerHTML = '';
     
     Object.keys(stats).forEach(className => {
@@ -357,7 +387,10 @@ function updateStatisticsPanel(stats) {
 // UPDATE CHART
 // ============================================================
 function updateChart(stats) {
-    const ctx = document.getElementById('statsChart').getContext('2d');
+    const ctx = document.getElementById('statsChart');
+    if (!ctx) return;
+    
+    const context = ctx.getContext('2d');
     
     const labels = [];
     const data = [];
@@ -374,7 +407,7 @@ function updateChart(stats) {
         myChart.destroy();
     }
     
-    myChart = new Chart(ctx, {
+    myChart = new Chart(context, {
         type: 'doughnut',
         data: {
             labels: labels,
@@ -427,9 +460,17 @@ function updateChangeIndicators() {
     const forestChangePercent = ((forestChange / forest2000) * 100).toFixed(1);
     
     // Update UI
-    document.getElementById('forestChange').textContent = `${forestChange > 0 ? '+' : ''}${Math.round(forestChange).toLocaleString()} ha`;
-    document.getElementById('forestChangePercent').textContent = `(${forestChangePercent}%)`;
-    document.getElementById('forestChange').style.color = forestChange >= 0 ? '#4CAF50' : '#E53935';
+    const forestChangeElement = document.getElementById('forestChange');
+    const forestChangePercentElement = document.getElementById('forestChangePercent');
+    
+    if (forestChangeElement) {
+        forestChangeElement.textContent = `${forestChange > 0 ? '+' : ''}${Math.round(forestChange).toLocaleString()} ha`;
+        forestChangeElement.style.color = forestChange >= 0 ? '#4CAF50' : '#E53935';
+    }
+    
+    if (forestChangePercentElement) {
+        forestChangePercentElement.textContent = `(${forestChangePercent}%)`;
+    }
 }
 
 // ============================================================
@@ -550,6 +591,7 @@ function downloadTextReport() {
 // ============================================================
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Initializing Forest Change Monitor...');
+    console.log('Using jsDelivr CDN for large GeoJSON files');
     
     // Initialize map
     initMap();
