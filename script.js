@@ -89,31 +89,66 @@ function initMap() {
     // Setup compass
     setupCompass();
     
-    // Load data from GitHub Releases via jsDelivr
+    // Load data from GitHub Releases with LFS support
     loadForestData();
 }
 
 // ============================================================
-// LOAD GEOJSON DATA FROM GITHUB RELEASES VIA JSDELIVR
+// FUNCTION TO FETCH AND PARSE LFS FILES FROM GITHUB RELEASES
+// ============================================================
+async function fetchLFSFile(url) {
+    console.log('Fetching from:', url);
+    
+    const response = await fetch(url);
+    const text = await response.text();
+    
+    // Check if it's an LFS pointer file
+    if (text.startsWith('version https://git-lfs.github.com')) {
+        console.log('LFS pointer detected, fetching actual file from GitHub API...');
+        
+        // Extract the SHA from the pointer file
+        const shaMatch = text.match(/oid sha256:([a-f0-9]+)/);
+        if (shaMatch) {
+            const sha = shaMatch[1];
+            console.log('LFS SHA:', sha);
+            
+            // Use GitHub API to get the actual file content
+            const apiUrl = `https://api.github.com/repos/kent701/Osa-forest-change-map/git/blobs/${sha}`;
+            console.log('Fetching from API:', apiUrl);
+            
+            const apiResponse = await fetch(apiUrl);
+            const apiData = await apiResponse.json();
+            
+            if (apiData.content) {
+                // Decode base64 content
+                const decodedContent = atob(apiData.content);
+                return JSON.parse(decodedContent);
+            }
+        }
+        throw new Error('Could not extract LFS file content');
+    }
+    
+    // If not LFS, try to parse as JSON
+    return JSON.parse(text);
+}
+
+// ============================================================
+// LOAD GEOJSON DATA FROM GITHUB RELEASES WITH LFS SUPPORT
 // ============================================================
 function loadForestData() {
-    console.log('Loading forest data from GitHub Releases via jsDelivr...');
+    console.log('Loading forest data from GitHub Releases with LFS support...');
     
-    // Using jsDelivr CDN - works better with large files and Git LFS
-    const url2000 = 'https://cdn.jsdelivr.net/gh/kent701/Osa-forest-change-map@v1.0/osa_2000_forest.geojson';
-    const url2024 = 'https://cdn.jsdelivr.net/gh/kent701/Osa-forest-change-map@v1.0/osa_2024_forest.geojson';
+    // Use the direct release download URLs
+    const url2000 = 'https://github.com/kent701/Osa-forest-change-map/releases/download/v1.0/osa_2000_forest.geojson';
+    const url2024 = 'https://github.com/kent701/Osa-forest-change-map/releases/download/v1.0/osa_2024_forest.geojson';
+    
+    let loaded2000 = false;
+    let loaded2024 = false;
     
     // Load 2000 data
-    fetch(url2000)
-        .then(response => {
-            console.log('2000 response status:', response.status);
-            if (!response.ok) {
-                throw new Error(`Failed to load 2000 data: ${response.status} ${response.statusText}`);
-            }
-            return response.json();
-        })
+    fetchLFSFile(url2000)
         .then(data => {
-            console.log('✅ 2000 data loaded successfully via jsDelivr');
+            console.log('✅ 2000 data loaded successfully');
             console.log('2000 features count:', data.features ? data.features.length : 'No features');
             
             stats2000 = calculateStatistics(data);
@@ -137,25 +172,20 @@ function loadForestData() {
                 }
             });
             
-            // Check if 2024 data is also loaded
-            checkBothDatasetsLoaded();
+            loaded2000 = true;
+            if (loaded2000 && loaded2024) {
+                finishLoading();
+            }
         })
         .catch(error => {
             console.error('❌ Error loading 2000 data:', error);
-            alert(`Could not load 2000 data from jsDelivr.\n\nError: ${error.message}\n\nCheck:\n1. Release v1.0 exists\n2. Files are attached to release\n3. Internet connection\n\nSee browser console (F12) for details.`);
+            alert(`Could not load 2000 data.\n\nError: ${error.message}\n\nMake sure:\n1. Files are uploaded to release v1.0\n2. You have internet connection\n\nSee console for details.`);
         });
     
     // Load 2024 data
-    fetch(url2024)
-        .then(response => {
-            console.log('2024 response status:', response.status);
-            if (!response.ok) {
-                throw new Error(`Failed to load 2024 data: ${response.status} ${response.statusText}`);
-            }
-            return response.json();
-        })
+    fetchLFSFile(url2024)
         .then(data => {
-            console.log('✅ 2024 data loaded successfully via jsDelivr');
+            console.log('✅ 2024 data loaded successfully');
             console.log('2024 features count:', data.features ? data.features.length : 'No features');
             
             stats2024 = calculateStatistics(data);
@@ -179,27 +209,27 @@ function loadForestData() {
                 }
             });
             
-            // Check if 2000 data is also loaded
-            checkBothDatasetsLoaded();
+            loaded2024 = true;
+            if (loaded2000 && loaded2024) {
+                finishLoading();
+            }
         })
         .catch(error => {
             console.error('❌ Error loading 2024 data:', error);
-            alert(`Could not load 2024 data from jsDelivr.\n\nError: ${error.message}\n\nCheck:\n1. Release v1.0 exists\n2. Files are attached to release\n3. Internet connection\n\nSee browser console (F12) for details.`);
+            alert(`Could not load 2024 data.\n\nError: ${error.message}\n\nMake sure:\n1. Files are uploaded to release v1.0\n2. You have internet connection\n\nSee console for details.`);
         });
 }
 
-// Helper function to check if both datasets are loaded
-function checkBothDatasetsLoaded() {
-    if (forestLayer2000 && forestLayer2024) {
-        setTimeout(() => {
-            showYear('2000');
-            updateChangeIndicators();
-            setupHoverHighlights();
-            console.log('🎉 Both datasets loaded successfully! Application ready.');
-            console.log('📊 2000 Total Area:', Math.round(stats2000.Total).toLocaleString(), 'ha');
-            console.log('📊 2024 Total Area:', Math.round(stats2024.Total).toLocaleString(), 'ha');
-        }, 500);
-    }
+// Helper function to finish loading
+function finishLoading() {
+    setTimeout(() => {
+        showYear('2000');
+        updateChangeIndicators();
+        setupHoverHighlights();
+        console.log('🎉 Both datasets loaded successfully! Application ready.');
+        console.log('📊 2000 Total Area:', Math.round(stats2000.Total).toLocaleString(), 'ha');
+        console.log('📊 2024 Total Area:', Math.round(stats2024.Total).toLocaleString(), 'ha');
+    }, 500);
 }
 
 // ============================================================
@@ -331,7 +361,7 @@ function showYear(year) {
         map.removeLayer(forestLayer2024);
     }
     
-    // Add selected year with fade animation
+    // Add selected year
     if (year === '2000' && forestLayer2000) {
         forestLayer2000.addTo(map);
         updateStatisticsPanel(stats2000);
@@ -591,7 +621,7 @@ function downloadTextReport() {
 // ============================================================
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Initializing Forest Change Monitor...');
-    console.log('Using jsDelivr CDN for large GeoJSON files');
+    console.log('Using GitHub API to fetch LFS files');
     
     // Initialize map
     initMap();
