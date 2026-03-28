@@ -316,7 +316,7 @@ function showYear(year) {
 function loadForestData() {
     console.log('Loading forest data...');
     
-    fetch('osa_2000_forest.geojson')
+    fetch('/osa_2000_forest.geojson')
         .then(response => response.json())
         .then(data => {
             console.log('✅ 2000 data loaded');
@@ -346,7 +346,7 @@ function loadForestData() {
             alert('Could not load osa_2000_forest.geojson');
         });
     
-    fetch('osa_2024_forest.geojson')
+    fetch('/osa_2024_forest.geojson')
         .then(response => response.json())
         .then(data => {
             console.log('✅ 2024 data loaded');
